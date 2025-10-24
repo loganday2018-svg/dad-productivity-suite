@@ -40,35 +40,53 @@ class CalendarHelper:
             return 0
 
     @staticmethod
-    def get_latest_month(df: pd.DataFrame, scenario: str = 'actual_cy') -> str:
+    def get_latest_month(df: pd.DataFrame, scenario: str = 'actual_cy', min_nonzero_accounts: int = 10) -> str:
         """
-        Find the latest month with non-null data.
+        Find the latest month with meaningful data.
+
+        A month is considered to have meaningful data if it has at least
+        min_nonzero_accounts with non-zero values.
 
         Args:
             df: Tidy DataFrame with columns: entity, account, scenario, month, value
             scenario: Which scenario to check (default: actual_cy)
+            min_nonzero_accounts: Minimum number of accounts with non-zero data
 
         Returns:
             Latest month name
         """
-        # Filter to scenario
-        scenario_data = df[df['scenario'] == scenario]
+        # Filter to scenario, exclude totals to avoid double-counting
+        scenario_data = df[(df['scenario'] == scenario) & (~df['is_total'])]
 
-        # Get months with data
-        months_with_data = scenario_data[scenario_data['value'].notna()]['month'].unique()
+        # For each month, count accounts with non-zero values
+        month_quality = {}
+        for month in MONTH_ORDER[:-1]:  # Exclude 'FY'
+            month_data = scenario_data[scenario_data['month'] == month]
+            nonzero_count = (month_data['value'].abs() > 0.01).sum()  # Allow small rounding errors
+            month_quality[month] = nonzero_count
+
+        # Find months that meet threshold
+        valid_months = [m for m, count in month_quality.items() if count >= min_nonzero_accounts]
 
         # Sort by month order
         sorted_months = sorted(
-            [m for m in months_with_data if m != 'FY'],
+            valid_months,
             key=lambda x: CalendarHelper.month_to_number(x)
         )
 
         if not sorted_months:
-            logger.warning(f"No months found for scenario {scenario}")
-            return 'Jan'
+            logger.warning(f"No months found with sufficient data for scenario {scenario}")
+            # Fallback to old logic
+            months_with_data = scenario_data[scenario_data['value'].notna()]['month'].unique()
+            sorted_months = sorted(
+                [m for m in months_with_data if m != 'FY'],
+                key=lambda x: CalendarHelper.month_to_number(x)
+            )
+            if not sorted_months:
+                return 'Jan'
 
         latest = sorted_months[-1]
-        logger.info(f"Latest month detected: {latest}")
+        logger.info(f"Latest month detected: {latest} (with {month_quality.get(latest, 0)} non-zero accounts)")
         return latest
 
     @staticmethod

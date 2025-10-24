@@ -78,41 +78,47 @@ class PLParser:
         """
         Extract column indices for each scenario block.
 
+        For files with multiple years, returns only the LATEST year for CY
+        and the SECOND LATEST for PY.
+
         Args:
             header_row: The header row as a Series
 
         Returns:
             Dict mapping scenario name to list of column indices
         """
-        scenarios = {}
-        current_scenario = None
-        scenario_cols = []
+        # First, find all year blocks
+        year_blocks = {}  # year -> list of column indices
 
         for idx, val in enumerate(header_row):
             val_str = str(val).strip()
 
-            # Detect scenario block start
-            if 'Actual' in val_str:
-                if scenario_cols and current_scenario:
-                    scenarios[current_scenario] = scenario_cols.copy()
-                scenario_cols = []
-                if 'CY' in val_str or idx + 1 < len(header_row) and 'CY' in str(header_row.iloc[idx + 1]):
-                    current_scenario = 'actual_cy'
-                elif 'PY' in val_str or idx + 1 < len(header_row) and 'PY' in str(header_row.iloc[idx + 1]):
-                    current_scenario = 'actual_py'
-            elif 'Budget' in val_str:
-                if scenario_cols and current_scenario:
-                    scenarios[current_scenario] = scenario_cols.copy()
-                scenario_cols = []
-                current_scenario = 'budget'
+            # Check if this is a month column
+            for month in MONTHS:
+                if val_str.startswith(month):
+                    # Extract year (e.g., "Jan 22" -> "22", "FY24" -> "24")
+                    year_part = val_str.replace(month, '').strip()
+                    if year_part:
+                        if year_part not in year_blocks:
+                            year_blocks[year_part] = []
+                        year_blocks[year_part].append(idx)
+                    break
 
-            # Collect month columns
-            if current_scenario and any(month in val_str for month in MONTHS):
-                scenario_cols.append(idx)
+        # Sort years to find latest
+        sorted_years = sorted(year_blocks.keys())
 
-        # Add last scenario
-        if current_scenario and scenario_cols:
-            scenarios[current_scenario] = scenario_cols.copy()
+        scenarios = {}
+        if len(sorted_years) >= 1:
+            # Latest year = Actual CY
+            latest_year = sorted_years[-1]
+            scenarios['actual_cy'] = year_blocks[latest_year]
+            logger.info(f"Using year {latest_year} as Actual CY")
+
+        if len(sorted_years) >= 2:
+            # Second latest = Actual PY
+            py_year = sorted_years[-2]
+            scenarios['actual_py'] = year_blocks[py_year]
+            logger.info(f"Using year {py_year} as Actual PY")
 
         logger.info(f"Extracted scenarios: {list(scenarios.keys())}")
         return scenarios
@@ -219,9 +225,17 @@ class PLParser:
             # Extract values for each scenario
             for scenario_name, col_indices in scenarios.items():
                 for col_idx in col_indices:
-                    # Get month name
-                    month = str(header_row.iloc[col_idx]).strip()
-                    if month not in MONTHS:
+                    # Get month name from header (e.g., "Jan 22" -> "Jan")
+                    month_raw = str(header_row.iloc[col_idx]).strip()
+
+                    # Extract just the month part
+                    month = None
+                    for m in MONTHS:
+                        if month_raw.startswith(m):
+                            month = m
+                            break
+
+                    if month is None:
                         continue
 
                     value = df.iloc[row_idx, col_idx]
