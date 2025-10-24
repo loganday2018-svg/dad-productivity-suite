@@ -34,3 +34,9 @@ dist/
 build/
 *.pptx
 *.xlsx
+
+# Data files
+src/dashboard/data/raw/*
+src/dashboard/data/processed/*
+!src/dashboard/data/raw/.gitkeep
+!src/dashboard/data/processed/.gitkeep
