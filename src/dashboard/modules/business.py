@@ -40,7 +40,7 @@ class CalendarHelper:
             return 0
 
     @staticmethod
-    def get_latest_month(df: pd.DataFrame, scenario: str = 'actual_cy', min_nonzero_accounts: int = 10) -> str:
+    def get_latest_month(df: pd.DataFrame, scenario: str = 'actual_cy', min_nonzero_accounts: int = 50) -> str:
         """
         Find the latest month with meaningful data.
 

@@ -91,27 +91,28 @@ class KPIAggregator:
 
         # Revenue & Throughput - prioritize "Total Net Sales" or "Net Sales"
         revenue = get_total('Total Net Sales', 'Net Sales', 'Total Sales', 'Sales', 'Revenue')
-        if revenue:
+        if revenue is not None:
             kpis['revenue'] = revenue
 
         # Gross Profit
         gross_profit = get_total('Gross Profit')
-        if gross_profit and revenue:
+        if gross_profit is not None:
             kpis['gross_profit'] = gross_profit
-            kpis['gross_margin_pct'] = (gross_profit / revenue) * 100
+            if revenue is not None and revenue != 0:
+                kpis['gross_margin_pct'] = (gross_profit / revenue) * 100
 
         # EBITDA
         ebitda = get_total('EBITDA')
-        if ebitda:
+        if ebitda is not None:
             kpis['ebitda'] = ebitda
-            if revenue:
+            if revenue is not None and revenue != 0:
                 kpis['ebitda_pct'] = (ebitda / revenue) * 100
 
         # Operating Income
         operating_income = get_total('Operating Income')
-        if operating_income:
+        if operating_income is not None:
             kpis['operating_income'] = operating_income
-            if revenue:
+            if revenue is not None and revenue != 0:
                 kpis['operating_margin_pct'] = (operating_income / revenue) * 100
 
         return kpis

@@ -95,18 +95,25 @@ class PLParser:
         for idx, val in enumerate(header_row):
             val_str = str(val).strip()
 
+            # Skip NaN and empty values
+            if not val_str or val_str == 'nan':
+                continue
+
             # Check if this is a month column
             for month in MONTHS:
                 if val_str.startswith(month):
                     # Extract year (e.g., "Jan 22" -> "22", "FY24" -> "24")
                     year_part = val_str.replace(month, '').strip()
-                    if year_part:
+
+                    # Skip if no year part or just punctuation
+                    if year_part and year_part not in ['#', '']:
                         if year_part not in year_blocks:
                             year_blocks[year_part] = []
                         year_blocks[year_part].append(idx)
+                        logger.debug(f"Column {idx}: '{val_str}' -> year '{year_part}'")
                     break
 
-        # Sort years to find latest
+        # Sort years to find latest (handle both 2-digit and 4-digit years)
         sorted_years = sorted(year_blocks.keys())
 
         scenarios = {}
@@ -289,28 +296,57 @@ class PLParser:
         logger.info(f"Combined data: {len(combined)} total records from {len(all_data)} entities")
         return combined
 
-    def parse_summary_sheet(self, sheet_name: str) -> Optional[pd.DataFrame]:
+    def parse_summary_sheet(self, sheet_name: str) -> Optional[Dict[str, float]]:
         """
         Parse summary sheet for KPI rollups.
+
+        Extracts: Net Sales, Gross Margin, EBITDA, Operating Income
 
         Args:
             sheet_name: Name of summary sheet
 
         Returns:
-            DataFrame with KPI data or None if parsing fails
+            Dict of KPI names to values, or None if parsing fails
         """
         try:
             logger.info(f"Parsing summary sheet: {sheet_name}")
             df = pd.read_excel(self.workbook, sheet_name=sheet_name, header=None)
 
-            # Use same header detection logic
-            header_idx = self.detect_header_row(df)
-            if header_idx is None:
-                return None
+            kpis = {}
 
-            # For now, return simplified parsing
-            # Full implementation would extract specific KPIs
-            return df
+            # Search for key KPIs in the sheet
+            kpi_patterns = {
+                'net_sales': ['Total Net Sales', 'Net Sales', 'Sales'],
+                'gross_margin': ['Gross Margin', 'Gross Profit'],
+                'ebitda': ['EBITDA'],
+                'operating_income': ['Operating Income', 'Operating Profit']
+            }
+
+            for kpi_key, patterns in kpi_patterns.items():
+                for pattern in patterns:
+                    # Search for rows containing this pattern
+                    for row_idx in range(len(df)):
+                        for col_idx in range(min(10, df.shape[1])):  # Check first 10 columns
+                            cell_value = df.iloc[row_idx, col_idx]
+                            if isinstance(cell_value, str) and pattern in cell_value:
+                                # Found the KPI label, look for numeric value in adjacent columns
+                                for val_col in range(col_idx + 1, min(col_idx + 5, df.shape[1])):
+                                    val = df.iloc[row_idx, val_col]
+                                    try:
+                                        numeric_val = float(val)
+                                        kpis[kpi_key] = numeric_val
+                                        logger.info(f"Extracted {pattern}: {numeric_val}")
+                                        break
+                                    except (ValueError, TypeError):
+                                        continue
+                                if kpi_key in kpis:
+                                    break
+                        if kpi_key in kpis:
+                            break
+                    if kpi_key in kpis:
+                        break
+
+            return kpis if kpis else None
 
         except Exception as e:
             logger.warning(f"Could not parse summary sheet {sheet_name}: {e}")
