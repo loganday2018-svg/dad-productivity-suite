@@ -127,7 +127,7 @@ def main():
     # Period toggle
     period_mode = st.sidebar.radio(
         "Period",
-        options=["Month-over-Month", "Year-over-Year", "Year-to-Date"],
+        options=["Year-to-Date", "Month-over-Month", "Year-over-Year"],
         index=0
     )
 
