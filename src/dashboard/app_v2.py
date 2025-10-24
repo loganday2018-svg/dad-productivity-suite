@@ -216,11 +216,23 @@ def main():
             comparison_kpis = {}
             comparison_label = ""
 
-    # === HERO METRICS ===
+    # === HERO METRICS WITH SPARKLINES ===
     if period_mode == "Year-to-Date":
         st.header(f"Year-to-Date Metrics - {selected_entity} (Jan - {selected_month})")
     else:
         st.header(f"Key Metrics - {selected_entity} ({selected_month})")
+
+    # Get trailing 6 months for sparklines
+    trailing_months = calendar.get_trailing_months(selected_month, 6)
+
+    # Calculate KPIs for each trailing month
+    sparkline_data = {}
+    for month in trailing_months:
+        month_kpis = aggregator.calculate_kpis(selected_entity, month, 'actual_cy')
+        for key in ['revenue', 'cogs', 'gross_profit', 'sga', 'ebitda']:
+            if key not in sparkline_data:
+                sparkline_data[key] = []
+            sparkline_data[key].append(month_kpis.get(key, 0))
 
     # Two rows of cards
     metrics = [
@@ -237,7 +249,28 @@ def main():
         with cols[idx]:
             current_val = current_kpis.get(key, 0)
 
-            # Only show delta if not in YTD mode
+            # Create sparkline chart
+            spark_fig = go.Figure()
+            spark_fig.add_trace(go.Scatter(
+                y=sparkline_data[key],
+                mode='lines',
+                line=dict(color='#0066cc', width=2),
+                fill='tozeroy',
+                fillcolor='rgba(0, 102, 204, 0.1)',
+                hovertemplate='%{y:,.0f}<extra></extra>'
+            ))
+            spark_fig.update_layout(
+                showlegend=False,
+                height=60,
+                margin=dict(l=0, r=0, t=0, b=0),
+                xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+                yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                hovermode='x'
+            )
+
+            # Display metric with delta
             if period_mode == "Year-to-Date":
                 st.metric(
                     label=label,
@@ -250,6 +283,9 @@ def main():
                     value=format_currency(current_val),
                     delta=format_delta(current_val, comparison_val) if comparison_val is not None else None
                 )
+
+            # Show sparkline below metric
+            st.plotly_chart(spark_fig, use_container_width=True, config={'displayModeBar': False})
 
     # === INSIGHTS SECTION ===
     st.header("Performance Insights")
@@ -335,24 +371,58 @@ def main():
         st.subheader("Year-over-Year Bridge Analysis")
 
         if period_mode == "Year-over-Year" and comparison_kpis:
-            # Build waterfall for Revenue to EBITDA
+            # Build enhanced waterfall for EBITDA walk
+            py_ebitda = comparison_kpis.get('ebitda', 0)
+            cy_ebitda = current_kpis.get('ebitda', 0)
+
             py_revenue = comparison_kpis.get('revenue', 0)
             cy_revenue = current_kpis.get('revenue', 0)
             py_cogs = comparison_kpis.get('cogs', 0)
             cy_cogs = current_kpis.get('cogs', 0)
+            py_gp = comparison_kpis.get('gross_profit', 0)
+            cy_gp = current_kpis.get('gross_profit', 0)
             py_sga = comparison_kpis.get('sga', 0)
             cy_sga = current_kpis.get('sga', 0)
-            cy_ebitda = current_kpis.get('ebitda', 0)
 
             # Calculate deltas
             revenue_delta = cy_revenue - py_revenue
             cogs_delta = cy_cogs - py_cogs
+            gp_delta = cy_gp - py_gp
             sga_delta = cy_sga - py_sga
 
-            # Waterfall data
+            # EBITDA Waterfall data
             waterfall_data = {
                 'x': [
-                    f'PY {selected_month}\nRevenue',
+                    f'PY {selected_month}\nEBITDA',
+                    'Revenue\nImpact',
+                    'COGS\nImpact',
+                    'Gross Profit\nChange',
+                    'Direct Costs\nImpact',
+                    f'CY {selected_month}\nEBITDA'
+                ],
+                'measure': ['absolute', 'relative', 'relative', 'relative', 'relative', 'total'],
+                'y': [
+                    py_ebitda,
+                    revenue_delta,
+                    -cogs_delta,  # Negative COGS change helps EBITDA
+                    0,  # This is just for display, already captured above
+                    -sga_delta,   # Negative costs change helps EBITDA
+                    cy_ebitda
+                ],
+                'text': [
+                    format_currency(py_ebitda),
+                    f"{'+' if revenue_delta >= 0 else ''}{format_currency(revenue_delta)}",
+                    f"{'+' if -cogs_delta >= 0 else ''}{format_currency(-cogs_delta)}",
+                    f"{'+' if gp_delta >= 0 else ''}{format_currency(gp_delta)}",
+                    f"{'+' if -sga_delta >= 0 else ''}{format_currency(-sga_delta)}",
+                    format_currency(cy_ebitda)
+                ]
+            }
+
+            # Remove the Gross Profit step (it's redundant with Revenue + COGS)
+            waterfall_data = {
+                'x': [
+                    f'PY {selected_month}\nEBITDA',
                     'Revenue\nChange',
                     'COGS\nChange',
                     'Direct Costs\nChange',
@@ -360,14 +430,14 @@ def main():
                 ],
                 'measure': ['absolute', 'relative', 'relative', 'relative', 'total'],
                 'y': [
-                    py_revenue,
+                    py_ebitda,
                     revenue_delta,
-                    -cogs_delta,  # Negative because COGS reduces profit
-                    -sga_delta,   # Negative because costs reduce profit
+                    -cogs_delta,
+                    -sga_delta,
                     cy_ebitda
                 ],
                 'text': [
-                    format_currency(py_revenue),
+                    format_currency(py_ebitda),
                     f"{'+' if revenue_delta >= 0 else ''}{format_currency(revenue_delta)}",
                     f"{'+' if -cogs_delta >= 0 else ''}{format_currency(-cogs_delta)}",
                     f"{'+' if -sga_delta >= 0 else ''}{format_currency(-sga_delta)}",
@@ -381,29 +451,43 @@ def main():
                 measure=waterfall_data['measure'],
                 text=waterfall_data['text'],
                 textposition='outside',
-                connector={'line': {'color': 'rgb(63, 63, 63)'}},
+                connector={'line': {'color': 'rgb(63, 63, 63)', 'width': 2}},
                 increasing={'marker': {'color': '#28a745'}},
                 decreasing={'marker': {'color': '#dc3545'}},
                 totals={'marker': {'color': '#0066cc'}}
             ))
 
             fig.update_layout(
-                title=f"Year-over-Year Bridge: {selected_month} PY → CY",
+                title=f"EBITDA Bridge: {selected_month} Prior Year → Current Year",
                 showlegend=False,
                 plot_bgcolor='white',
                 paper_bgcolor='white',
-                height=500
+                height=500,
+                yaxis_title="Amount ($)"
             )
 
             st.plotly_chart(fig, width='stretch')
 
-            # Summary text
-            ebitda_change = cy_ebitda - comparison_kpis.get('ebitda', 0)
-            st.markdown(f"""
-            **Summary:** EBITDA changed by **{format_currency(ebitda_change)}**
-            ({'+' if ebitda_change >= 0 else ''}{(ebitda_change / abs(comparison_kpis.get('ebitda', 1)) * 100):.1f}%)
-            from prior year.
-            """)
+            # Enhanced summary metrics
+            ebitda_change = cy_ebitda - py_ebitda
+            ebitda_pct_change = (ebitda_change / abs(py_ebitda) * 100) if py_ebitda != 0 else 0
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("EBITDA Change", format_currency(ebitda_change),
+                         f"{'+' if ebitda_change >= 0 else ''}{ebitda_pct_change:.1f}%")
+            with col2:
+                py_margin = (py_ebitda / py_revenue * 100) if py_revenue != 0 else 0
+                cy_margin = (cy_ebitda / cy_revenue * 100) if cy_revenue != 0 else 0
+                margin_change = cy_margin - py_margin
+                st.metric("EBITDA Margin Change", f"{cy_margin:.1f}%",
+                         f"{'+' if margin_change >= 0 else ''}{margin_change:.1f} pp")
+            with col3:
+                gp_margin_py = (py_gp / py_revenue * 100) if py_revenue != 0 else 0
+                gp_margin_cy = (cy_gp / cy_revenue * 100) if cy_revenue != 0 else 0
+                gp_margin_change = gp_margin_cy - gp_margin_py
+                st.metric("Gross Margin Change", f"{gp_margin_cy:.1f}%",
+                         f"{'+' if gp_margin_change >= 0 else ''}{gp_margin_change:.1f} pp")
         else:
             st.info("Switch to 'Year-over-Year' mode to see the waterfall analysis.")
 
@@ -424,39 +508,106 @@ def main():
 
         kpi_key = kpi_map[selected_kpi]
 
-        # Build trend data
-        trend_data = []
-        for month in trailing_months:
-            cy_kpis = aggregator.calculate_kpis(selected_entity, month, 'actual_cy')
-            py_kpis = aggregator.calculate_kpis(selected_entity, month, 'actual_py')
+        if selected_entity == 'Enterprise (All)':
+            # Small Multiples: Show all entities in a grid
+            st.markdown("### Small Multiples - Entity Comparison")
+            st.markdown(f"*{selected_kpi} trends across all entities (6 months)*")
 
-            if kpi_key in cy_kpis:
-                trend_data.append({'Month': month, 'Period': 'Current Year', 'Value': cy_kpis[kpi_key]})
+            # Get list of entities (excluding Enterprise and RWW)
+            entity_list = [e for e in entities if e != 'Enterprise (All)']
 
-            if kpi_key in py_kpis:
-                trend_data.append({'Month': month, 'Period': 'Prior Year', 'Value': py_kpis[kpi_key]})
+            # Create subplot grid (3 columns)
+            from plotly.subplots import make_subplots
+            import math
 
-        if trend_data:
-            trend_df = pd.DataFrame(trend_data)
+            n_entities = len(entity_list)
+            n_cols = 3
+            n_rows = math.ceil(n_entities / n_cols)
 
-            fig = px.line(
-                trend_df,
-                x='Month',
-                y='Value',
-                color='Period',
-                title=f"{selected_kpi} Trend - 6 Month View",
-                markers=True,
-                labels={'Value': 'Amount ($)'}
+            fig = make_subplots(
+                rows=n_rows,
+                cols=n_cols,
+                subplot_titles=entity_list,
+                vertical_spacing=0.12,
+                horizontal_spacing=0.08
             )
 
+            for idx, entity in enumerate(entity_list):
+                row = idx // n_cols + 1
+                col = idx % n_cols + 1
+
+                # Build trend data for this entity
+                entity_trend = []
+                for month in trailing_months:
+                    cy_kpis = aggregator.calculate_kpis(entity, month, 'actual_cy')
+                    if kpi_key in cy_kpis:
+                        entity_trend.append(cy_kpis[kpi_key])
+                    else:
+                        entity_trend.append(0)
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=trailing_months,
+                        y=entity_trend,
+                        mode='lines+markers',
+                        line=dict(color='#0066cc', width=2),
+                        marker=dict(size=6),
+                        showlegend=False,
+                        hovertemplate='%{y:,.0f}<extra></extra>'
+                    ),
+                    row=row,
+                    col=col
+                )
+
+                # Update axes for each subplot
+                fig.update_xaxes(showticklabels=True, tickangle=45, row=row, col=col)
+                fig.update_yaxes(showticklabels=True, tickformat=',.0f', row=row, col=col)
+
             fig.update_layout(
+                height=n_rows * 250,
+                showlegend=False,
                 plot_bgcolor='white',
-                paper_bgcolor='white'
+                paper_bgcolor='white',
+                title_text=f"Entity Performance: {selected_kpi} Trends"
             )
 
             st.plotly_chart(fig, width='stretch')
+
         else:
-            st.warning("No trend data available.")
+            # Single entity trend view (existing code)
+            # Build trend data
+            trend_data = []
+            for month in trailing_months:
+                cy_kpis = aggregator.calculate_kpis(selected_entity, month, 'actual_cy')
+                py_kpis = aggregator.calculate_kpis(selected_entity, month, 'actual_py')
+
+                if kpi_key in cy_kpis:
+                    trend_data.append({'Month': month, 'Period': 'Current Year', 'Value': cy_kpis[kpi_key]})
+
+                if kpi_key in py_kpis:
+                    trend_data.append({'Month': month, 'Period': 'Prior Year', 'Value': py_kpis[kpi_key]})
+
+            if trend_data:
+                trend_df = pd.DataFrame(trend_data)
+
+                fig = px.line(
+                    trend_df,
+                    x='Month',
+                    y='Value',
+                    color='Period',
+                    title=f"{selected_kpi} Trend - 6 Month View",
+                    markers=True,
+                    labels={'Value': 'Amount ($)'}
+                )
+
+                fig.update_layout(
+                    plot_bgcolor='white',
+                    paper_bgcolor='white'
+                )
+
+                st.plotly_chart(fig, width='stretch')
+            else:
+                st.warning("No trend data available.")
 
     with tab4:
         st.subheader("Entity Subtotal Analysis")
