@@ -91,7 +91,12 @@ class KPIAggregator:
             Dict of KPI names to values
         """
         if entity == 'Enterprise (All)':
-            data = self.aggregate_enterprise(month, scenario)
+            # RWW contains the enterprise totals
+            data = self.df[
+                (self.df['entity'] == 'RWW') &
+                (self.df['month'] == month) &
+                (self.df['scenario'] == scenario)
+            ]
         else:
             data = self.df[
                 (self.df['entity'] == entity) &
@@ -175,7 +180,12 @@ class KPIAggregator:
             DataFrame of accounts in category
         """
         if entity == 'Enterprise (All)':
-            data = self.aggregate_enterprise(month, scenario)
+            # RWW contains the enterprise totals
+            data = self.df[
+                (self.df['entity'] == 'RWW') &
+                (self.df['month'] == month) &
+                (self.df['scenario'] == scenario)
+            ]
         else:
             data = self.df[
                 (self.df['entity'] == entity) &
@@ -241,13 +251,12 @@ class KPIAggregator:
             DataFrame with accounts as rows, months as columns
         """
         if entity == 'Enterprise (All)':
-            # Need to aggregate for each month
-            dfs = []
-            for month in months:
-                month_data = self.aggregate_enterprise(month, scenario)
-                month_data['month'] = month
-                dfs.append(month_data)
-            data = pd.concat(dfs, ignore_index=True)
+            # RWW contains the enterprise totals
+            data = self.df[
+                (self.df['entity'] == 'RWW') &
+                (self.df['month'].isin(months)) &
+                (self.df['scenario'] == scenario)
+            ]
         else:
             data = self.df[
                 (self.df['entity'] == entity) &

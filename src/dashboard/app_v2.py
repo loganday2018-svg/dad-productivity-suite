@@ -119,8 +119,9 @@ def main():
     # === SIDEBAR CONTROLS ===
     st.sidebar.header("Controls")
 
-    # Entity selector
-    entities = ['Enterprise (All)'] + sorted(pl_data['entity'].unique())
+    # Entity selector - exclude RWW since it's used for Enterprise (All)
+    available_entities = [e for e in pl_data['entity'].unique() if e != 'RWW']
+    entities = ['Enterprise (All)'] + sorted(available_entities)
     selected_entity = st.sidebar.selectbox("Entity", options=entities, index=0)
 
     # Period toggle
@@ -149,15 +150,21 @@ def main():
         ytd_months = [m for m in available_months if calendar.month_to_number(m) <= calendar.month_to_number(selected_month)]
 
         # Sum all months for YTD
-        ytd_data = pl_data[
-            (pl_data['month'].isin(ytd_months)) &
-            (pl_data['scenario'] == 'actual_cy')
-        ]
-
+        # If Enterprise (All), use RWW data (which contains enterprise totals)
         if selected_entity == 'Enterprise (All)':
-            ytd_agg = ytd_data.groupby(['account', 'is_total'])['value'].sum().reset_index()
+            ytd_data = pl_data[
+                (pl_data['entity'] == 'RWW') &
+                (pl_data['month'].isin(ytd_months)) &
+                (pl_data['scenario'] == 'actual_cy')
+            ]
         else:
-            ytd_agg = ytd_data[ytd_data['entity'] == selected_entity].groupby(['account', 'is_total'])['value'].sum().reset_index()
+            ytd_data = pl_data[
+                (pl_data['entity'] == selected_entity) &
+                (pl_data['month'].isin(ytd_months)) &
+                (pl_data['scenario'] == 'actual_cy')
+            ]
+
+        ytd_agg = ytd_data.groupby(['account', 'is_total'])['value'].sum().reset_index()
 
         # Extract KPIs from aggregated data
         current_kpis = {}
