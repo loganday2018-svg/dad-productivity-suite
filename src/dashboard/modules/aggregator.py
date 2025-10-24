@@ -23,6 +23,35 @@ class KPIAggregator:
         """
         self.df = df
 
+    def calculate_kpis_with_comparison(
+        self,
+        entity: str,
+        current_month: str,
+        comparison_month: str,
+        current_scenario: str = 'actual_cy',
+        comparison_scenario: str = 'actual_py'
+    ) -> Dict[str, Dict[str, float]]:
+        """
+        Calculate KPIs for current and comparison periods.
+
+        Args:
+            entity: Entity name or 'Enterprise (All)'
+            current_month: Current period month
+            comparison_month: Comparison period month
+            current_scenario: Scenario for current (default actual_cy)
+            comparison_scenario: Scenario for comparison (default actual_py)
+
+        Returns:
+            Dict with 'current' and 'comparison' keys, each containing KPIs
+        """
+        current = self.calculate_kpis(entity, current_month, current_scenario)
+        comparison = self.calculate_kpis(entity, comparison_month, comparison_scenario)
+
+        return {
+            'current': current,
+            'comparison': comparison
+        }
+
     def aggregate_enterprise(self, month: str, scenario: str = 'actual_cy') -> pd.DataFrame:
         """
         Aggregate all entities to enterprise level.
@@ -94,6 +123,11 @@ class KPIAggregator:
         if revenue is not None:
             kpis['revenue'] = revenue
 
+        # COGS
+        cogs = get_total('TOTAL COGS', 'Total COGS', 'COGS', 'Cost of Goods Sold')
+        if cogs is not None:
+            kpis['cogs'] = cogs
+
         # Gross Profit
         gross_profit = get_total('Gross Profit')
         if gross_profit is not None:
@@ -101,19 +135,23 @@ class KPIAggregator:
             if revenue is not None and revenue != 0:
                 kpis['gross_margin_pct'] = (gross_profit / revenue) * 100
 
-        # EBITDA
-        ebitda = get_total('EBITDA')
+        # SG&A - Use TOTAL DIRECT COSTS
+        sga = get_total('TOTAL DIRECT COSTS', 'Total Direct Costs', 'Direct Costs')
+        if sga is not None:
+            kpis['sga'] = sga
+
+        # EBITDA - Use "EBITDA, Incl Intercompany"
+        ebitda = get_total('EBITDA, Incl Intercompany', 'EBITDA Incl Intercompany', 'EBITDA')
         if ebitda is not None:
             kpis['ebitda'] = ebitda
             if revenue is not None and revenue != 0:
                 kpis['ebitda_pct'] = (ebitda / revenue) * 100
 
-        # Operating Income
-        operating_income = get_total('Operating Income')
-        if operating_income is not None:
-            kpis['operating_income'] = operating_income
+        # Operating Income (keep as fallback/alias for ebitda)
+        if ebitda is not None:
+            kpis['operating_income'] = ebitda
             if revenue is not None and revenue != 0:
-                kpis['operating_margin_pct'] = (operating_income / revenue) * 100
+                kpis['operating_margin_pct'] = (ebitda / revenue) * 100
 
         return kpis
 

@@ -93,10 +93,14 @@ def main():
         pl_data[pl_data['month'] != 'FY']['month'].unique(),
         key=lambda x: calendar.month_to_number(x)
     )
+
+    # Set default to latest_month
+    default_index = available_months.index(latest_month) if latest_month in available_months else len(available_months) - 1
+
     selected_month = st.sidebar.selectbox(
         "Month",
         options=available_months,
-        index=len(available_months) - 1 if latest_month in available_months else 0
+        index=default_index
     )
 
     # Entity selection
@@ -188,7 +192,7 @@ def main():
                 lambda x: f"${x:,.0f}" if pd.notna(x) else "N/A"
             )
 
-            st.dataframe(display_df, use_container_width=True)
+            st.dataframe(display_df, width='stretch')
 
             # Detailed explanations
             if len(entity_anomalies) > 0:
@@ -234,7 +238,7 @@ def main():
                 title="Revenue Components Over Time",
                 labels={'value': 'Amount ($)', 'month': 'Month'}
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         # COGS trend
         st.subheader("Cost of Goods Sold Trend")
@@ -261,7 +265,7 @@ def main():
                 title="COGS Components Over Time",
                 labels={'value': 'Amount ($)', 'month': 'Month'}
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         # Gross Margin Heatmap by Entity
         if selected_entity == 'Enterprise (All)':
@@ -281,7 +285,9 @@ def main():
             if gm_data:
                 gm_df = pd.DataFrame(gm_data)
                 gm_pivot = gm_df.pivot(index='entity', columns='month', values='gm_pct')
-                gm_pivot = gm_pivot[trailing_months]
+                # Only use months that actually exist in the data
+                available_months = [m for m in trailing_months if m in gm_pivot.columns]
+                gm_pivot = gm_pivot[available_months]
 
                 fig = px.imshow(
                     gm_pivot,
@@ -290,7 +296,7 @@ def main():
                     color_continuous_scale="RdYlGn",
                     aspect="auto"
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
 
     # Tab 3: Entity Drilldown
     with tab3:
@@ -336,7 +342,7 @@ def main():
 
             styled_table = display_table.style.apply(highlight_totals, axis=1)
 
-            st.dataframe(styled_table, use_container_width=True, height=600)
+            st.dataframe(styled_table, width='stretch', height=600)
         else:
             st.info("No data available for selected filters.")
 
