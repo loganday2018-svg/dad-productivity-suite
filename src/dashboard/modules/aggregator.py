@@ -72,15 +72,25 @@ class KPIAggregator:
 
         kpis = {}
 
-        # Helper to get total by keyword
-        def get_total(keyword: str) -> Optional[float]:
-            matches = data[data['account'].str.contains(keyword, case=False, na=False)]
-            if len(matches) > 0:
-                return matches['value'].iloc[0]
+        # Helper to get total by keyword - prioritize TOTAL rows
+        def get_total(*keywords: str) -> Optional[float]:
+            for keyword in keywords:
+                # First try to find total rows with this keyword
+                total_matches = data[
+                    data['account'].str.contains(keyword, case=False, na=False) &
+                    data['is_total']
+                ]
+                if len(total_matches) > 0:
+                    return total_matches['value'].iloc[0]
+
+                # Fallback to any row with keyword
+                matches = data[data['account'].str.contains(keyword, case=False, na=False)]
+                if len(matches) > 0:
+                    return matches['value'].iloc[0]
             return None
 
-        # Revenue & Throughput
-        revenue = get_total('Sales') or get_total('Revenue')
+        # Revenue & Throughput - prioritize "Total Net Sales" or "Net Sales"
+        revenue = get_total('Total Net Sales', 'Net Sales', 'Total Sales', 'Sales', 'Revenue')
         if revenue:
             kpis['revenue'] = revenue
 

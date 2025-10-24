@@ -12,12 +12,17 @@ class TestPLParser:
 
     def test_detect_header_row(self):
         """Test header row detection."""
-        # Create mock DataFrame with header
-        data = pd.DataFrame({
-            0: ['', '', '', 'Metadata', 'Metadata', '', '', '', '', '', '', '', '', '', 'Account'],
-            1: ['', '', '', 'Value', 'Value', '', '', '', '', '', '', '', '', 'Actual', 'Sales'],
-            2: ['', '', '', '123', '456', '', '', '', '', '', '', '', '', 'CY', 'Parts']
-        })
+        # Create mock DataFrame with header at row 13
+        rows = []
+        for i in range(15):
+            if i < 13:
+                rows.append(['', '', ''])
+            elif i == 13:
+                rows.append(['', 'Actual', 'CY'])
+            else:
+                rows.append(['Account', 'Sales', 'Parts'])
+
+        data = pd.DataFrame(rows)
 
         parser = PLParser('dummy.xlsx')
         header_idx = parser.detect_header_row(data)

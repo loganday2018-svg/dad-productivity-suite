@@ -14,8 +14,10 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Entity tab allowlist
-ENTITY_TABS = ['RWW', 'HG', 'DCs', 'Corp']
+# Entity tab allowlist - expand to include all entity sheets
+ENTITY_TABS = ['RWW', 'HG', 'DCs', 'DCs and Corp', 'Corp', 'REMAN', 'Z', 'DT',
+               'EVO', 'CARLI', 'COGNITO', 'VC', 'ECGS', 'ICON', 'LT',
+               'BULLETPROOF', 'NAPC']
 
 # Month names
 MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
