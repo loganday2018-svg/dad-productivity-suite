@@ -252,18 +252,25 @@ def main():
             # Create sparkline chart
             spark_fig = go.Figure()
             spark_fig.add_trace(go.Scatter(
+                x=trailing_months,
                 y=sparkline_data[key],
                 mode='lines',
                 line=dict(color='#0066cc', width=2),
                 fill='tozeroy',
                 fillcolor='rgba(0, 102, 204, 0.1)',
-                hovertemplate='%{y:,.0f}<extra></extra>'
+                hovertemplate='%{x}: %{y:,.0f}<extra></extra>'
             ))
             spark_fig.update_layout(
                 showlegend=False,
-                height=60,
-                margin=dict(l=0, r=0, t=0, b=0),
-                xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+                height=80,
+                margin=dict(l=0, r=0, t=0, b=20),
+                xaxis=dict(
+                    showticklabels=True,
+                    showgrid=False,
+                    zeroline=False,
+                    tickfont=dict(size=9),
+                    tickangle=0
+                ),
                 yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
